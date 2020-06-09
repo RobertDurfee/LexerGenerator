@@ -1,0 +1,15 @@
+Grammar ::= (Production | Consumption)+;
+Production ::= Lookahead '=>' TOKEN ';';
+Consumption ::= Lookahead '=>' ';';
+Lookahead ::= Alternation ('/' Alternation)*;
+Alternation ::= Concatenation ('|' Concatenation)*;
+Concatenation ::= Repetition+;
+Repetition ::= Atom ('*' | '+' | '?' | RepetitionExact | RepetitionMinimum | RepetitionMaximum | RepetitionRange)?;
+Atom ::= CharacterClass | Literal | '^' | '$' | '.' | '(' Lookahead ')';
+CharacterClass ::= '[' '^'? (CharacterClassRange | Literal)+ ']';
+CharacterClassRange ::= Literal '-' Literal;
+Literal ::= UNESCAPED_LITERAL | ESCAPED_LITERAL | CONTROL_LITERAL | OCTAL_LITERAL | HEXADECIMAL_LITERAL | UNICODE_LITERAL;
+RepetitionRange ::= '{' INTEGER ',' INTEGER '}';
+RepetitionMinimum ::= '{' INTEGER ',' '}';
+RepetitionMaximum ::= '{' ',' INTEGER '}';
+RepetitionExact ::= '{' INTEGER '}';
