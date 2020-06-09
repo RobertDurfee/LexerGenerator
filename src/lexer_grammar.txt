@@ -14,13 +14,12 @@
 \[ => LEFT_SQUARE_BRACKET;
 \] => RIGHT_SQUARE_BRACKET;
 \- => HYPHEN;
-[^\.\^\$\*\+\-\?\(\)\[\]\{\}\\\|] => UNESCAPED_LITERAL;
-\\[\.\^\$\*\+\-\?\(\)\[\]\{\}\\\|] => ESCAPED_LITERAL;
+[^\.\^\$\*\+\-\?\(\)\[\]\{\}\\\|\/] => UNESCAPED_LITERAL;
+\\[\.\^\$\*\+\-\?\(\)\[\]\{\}\\\|\/] => ESCAPED_LITERAL;
 \\[abfnrtv] => CONTROL_LITERAL;
 \\[0-7]{1,3} => OCTAL_LITERAL;
 \\x[0-9a-fA-F]{,2} => HEXADECIMAL_LITERAL;
 \\(u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}) => UNICODE_LITERAL;
-[^\-\\\]\^]|\\. => CLASS_LITERAL;
 \{ => LEFT_CURLY_BRACKET;
 \} => RIGHT_CURLY_BRACKET;
 , => COMMA;
