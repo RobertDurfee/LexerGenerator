@@ -18,11 +18,11 @@ impl IDGenerator {
 macro_rules! map {
     ($($x:expr => $y:expr),*) => {{
         #[allow(unused_mut)]
-        let mut temp_hash_map = std::collections::HashMap::new();
+        let mut temp_map = std::collections::BTreeMap::new();
         $(
-            temp_hash_map.insert($x, $y);
+            temp_map.insert($x, $y);
         )*
-        temp_hash_map
+        temp_map
     }}
 }
 
@@ -30,11 +30,11 @@ macro_rules! map {
 macro_rules! set {
     ($($x:expr),*) => {{
         #[allow(unused_mut)]
-        let mut temp_hash_set = std::collections::HashSet::new();
+        let mut temp_set = std::collections::BTreeSet::new();
         $(
-            temp_hash_set.insert($x);
+            temp_set.insert($x);
         )*
-        temp_hash_set
+        temp_set
     }}
 }
 

@@ -1,5 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::util::IDGenerator;
 use crate::re::RE;
@@ -7,61 +6,79 @@ use crate::re::RE;
 #[derive(Debug, PartialEq)]
 pub(crate) struct NFA<S, E> 
 where
-    S: Eq + Hash,
-    E: Eq + Hash
+    S: Ord,
+    E: Ord
 { 
     initial: S,
-    transitions: HashMap<S, HashMap<E, HashSet<S>>>,
-    finals: HashSet<S>,
+    transitions: BTreeMap<S, BTreeMap<E, BTreeSet<S>>>,
+    finals: BTreeSet<S>,
 }
 
 impl<S, E> NFA<S, E>
 where
-    S: Copy + Eq + Hash,
-    E: Copy + Eq + Hash
+    S: Copy + Ord,
+    E: Copy + Ord
 {
     fn new(initial: S) -> Self {
         Self {
             initial,
-            transitions: map![initial => HashMap::new()],
-            finals: HashSet::new(),
+            transitions: map![initial => BTreeMap::new()],
+            finals: BTreeSet::new(),
         }
     }
 
     fn insert(&mut self, state: S) {
         if !self.transitions.contains_key(&state) {
-            self.transitions.insert(state, HashMap::new());
+            self.transitions.insert(state, BTreeMap::new());
         }
     }
 
     fn insert_transition(&mut self, start: S, event: E, end: S) {
         if !self.transitions.contains_key(&start) {
-            self.transitions.insert(start, HashMap::new());
+            self.transitions.insert(start, BTreeMap::new());
         }
         if !self.transitions.contains_key(&end) {
-            self.transitions.insert(end, HashMap::new());
+            self.transitions.insert(end, BTreeMap::new());
         }
         let start_transitions = self.transitions.get_mut(&start).unwrap();
         if !start_transitions.contains_key(&event) {
-            start_transitions.insert(event, HashSet::new());
+            start_transitions.insert(event, BTreeSet::new());
         }
         start_transitions.get_mut(&event).unwrap().insert(end);
     }
 
     fn insert_final(&mut self, state: S) {
         if !self.transitions.contains_key(&state) {
-            self.transitions.insert(state, HashMap::new());
+            self.transitions.insert(state, BTreeMap::new());
         }
         self.finals.insert(state);
     }
 }
 
-impl<S, E> Extend<(S, HashMap<E, HashSet<S>>)> for NFA<S, E>
-where 
-    S: Copy + Eq + Hash,
-    E: Copy + Eq + Hash
+impl<S, E> NFA<S, E> 
+where
+    S: Ord,
+    E: Ord
 {
-    fn extend<T: IntoIterator<Item = (S, HashMap<E, HashSet<S>>)>>(&mut self, iter: T) {
+    pub(crate) fn initial(&self) -> &S {
+        &self.initial
+    }
+
+    pub(crate) fn get(&self, state: &S) -> Option<&BTreeMap<E, BTreeSet<S>>> {
+        self.transitions.get(state)
+    }
+
+    pub(crate) fn is_final(&self, state: &S) -> bool {
+        self.finals.contains(state)
+    }
+}
+
+impl<S, E> Extend<(S, BTreeMap<E, BTreeSet<S>>)> for NFA<S, E>
+where 
+    S: Copy + Ord,
+    E: Copy + Ord
+{
+    fn extend<T: IntoIterator<Item = (S, BTreeMap<E, BTreeSet<S>>)>>(&mut self, iter: T) {
         for (start, transitions) in iter.into_iter() {
             for (event, ends) in transitions.into_iter() {
                 for end in ends.into_iter() {
@@ -72,7 +89,7 @@ where
     }
 }
 
-type ENFA<S, E> = NFA<S, Option<E>>;
+pub(crate) type ENFA<S, E> = NFA<S, Option<E>>;
 
 impl ENFA<u128, char> {
     fn _from(re: RE, ids: &mut IDGenerator) -> Self {
