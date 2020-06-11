@@ -1,369 +1,298 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
-use std::usize;
+use std::ops::Range;
+use std::u32;
 
 use crate::re::RE;
 
-#[derive(Debug, PartialEq)]
-pub(crate) struct NFA<S, E> { 
-    st_to_ix: BTreeMap<Rc<S>, usize>,
-    ix_to_st: Vec<Rc<S>>,
-    initial: usize,
-    transitions: BTreeMap<usize, BTreeMap<E, BTreeSet<usize>>>,
-    finals: BTreeSet<usize>,
+type Ix = usize;
+
+pub(crate) struct NFA<St, Ev> { 
+    st_ix: BTreeMap<Rc<St>, Ix>,
+    ix_st: BTreeMap<Ix, Rc<St>>,
+    transitions: BTreeMap<Ix, BTreeMap<Ev, BTreeSet<Ix>>>,
+    finals: BTreeSet<Ix>,
 }
 
-impl<S, E> NFA<S, E>
+pub(crate) const INIT_IX: Ix = 0;
+
+impl<St, Ev> NFA<St, Ev>
 where
-    S: Ord,
-    E: Ord,
+    St: Ord,
+    Ev: Ord,
 {
-    pub(crate) fn new(initial: S) -> Self {
-        let initial_rc = Rc::new(initial);
+    pub(crate) fn new(init_st: St) -> Self {
+        let init_st_rc = Rc::new(init_st);
         Self {
-            st_to_ix: map![initial_rc.clone() => 0],
-            ix_to_st: vec![initial_rc],
-            initial: 0,
-            transitions: map![0 => BTreeMap::new()],
+            st_ix: map![init_st_rc.clone() => INIT_IX],
+            ix_st: map![INIT_IX => init_st_rc],
+            transitions: map![INIT_IX => BTreeMap::new()],
             finals: BTreeSet::new(),
         }
     }
 
-    fn insert_internal(&mut self, state: S) -> usize {
-        if let Some(&ix) = self.st_to_ix.get(&state) {
+    pub(crate) fn insert_state(&mut self, st: St) -> Ix {
+        if let Some(ix) = self.ix(&st) {
             ix
         } else {
-            let ix = self.st_to_ix.len();
-            let state_rc = Rc::new(state);
-            self.st_to_ix.insert(state_rc.clone(), ix);
-            self.ix_to_st.push(state_rc);
+            let ix = self.st_ix.len();
+            let st_rc = Rc::new(st);
+            self.st_ix.insert(st_rc.clone(), ix);
+            self.ix_st.insert(ix, st_rc);
             self.transitions.insert(ix, BTreeMap::new());
             ix
         }
     }
-    
-    pub(crate) fn insert(&mut self, state: S) {
-        self.insert_internal(state);
+
+    pub(crate) fn ix(&self, st: &St) -> Option<Ix> {
+        self.st_ix.get(st).map(|&ix| ix)
     }
 
-    pub(crate) fn insert_transition(&mut self, start: S, event: E, end: S) {
-        let start_ix = self.insert_internal(start);
-        let end_ix = self.insert_internal(end);
-        let transitions = self.transitions.get_mut(&start_ix).unwrap();
-        if let Some(ends) = transitions.get_mut(&event) {
-            ends.insert(end_ix);
+    pub(crate) fn st(&self, ix: Ix) -> Option<&St> {
+        self.ix_st.get(&ix).map(|st| &**st)
+    }
+
+    fn _ix(&self, st: &St) -> Ix {
+        *self.st_ix.get(st).unwrap()
+    }
+
+    fn _st(&self, ix: Ix) -> &St {
+        self.ix_st.get(&ix).unwrap()
+    }
+
+    pub(crate) fn insert_transition(&mut self, start_ix: Ix, ev: Ev, end_ix: Ix) {
+        let start_transitions = self.transitions.get_mut(&start_ix).unwrap();
+        if let Some(end_ixs) = start_transitions.get_mut(&ev) {
+            end_ixs.insert(end_ix);
         } else {
-            transitions.insert(event, set![end_ix]);
+            start_transitions.insert(ev, set![end_ix]);
         }
     }
 
-    pub(crate) fn insert_final(&mut self, state: S) {
-        let state_ix = self.insert_internal(state);
-        self.finals.insert(state_ix);
+    pub(crate) fn set_final(&mut self, ix: Ix) {
+        self.finals.insert(ix);
+    }
+ 
+    pub(crate) fn get_initial(&self) -> &St {
+        self._st(INIT_IX)
     }
 
-    pub(crate) fn initial(&self) -> &S {
-        &*self.ix_to_st[self.initial]
+    pub(crate) fn get_transitions(&self) -> impl Iterator<Item = (&St, &Ev, &St)> {
+        self.transitions.iter().flat_map(move |(&start_ix, transitions)| transitions.iter().flat_map(move |(ev, end_ixs)| end_ixs.iter().map(move |&end_ix| (self._st(start_ix), ev, self._st(end_ix)))))
     }
 
-    pub(crate) fn transitions(&self) -> Transitions<'_, S, E> {
-        Transitions::new(&self.ix_to_st, self.transitions.iter())
+    pub(crate) fn get_finals(&self) -> impl Iterator<Item = &St> {
+        self.finals.iter().map(move |&final_ix| self._st(final_ix))
     }
 
-    pub(crate) fn finals(&self) -> Finals<'_, S> {
-        Finals::new(&self.ix_to_st, self.finals.iter())
+    pub(crate) fn get_outgoing_flat(&self, ix: Ix) -> Option<impl Iterator<Item = (&Ev, &St)>> {
+        self.transitions.get(&ix).map(|transitions| transitions.iter().flat_map(move |(ev, end_ixs)| end_ixs.iter().map(move |&end_ix| (ev, self._st(end_ix)))))
     }
 
-    pub(crate) fn get_flat(&self, state: &S) -> Option<GetFlat<'_, S, E>> {
-        if let Some(ix) = self.st_to_ix.get(state) {
-            Some(GetFlat::new(&self.ix_to_st, self.transitions.get(ix).unwrap().iter()))
-        } else {
-            None
-        }
+    pub(crate) fn get_outgoing_grouped(&self, ix: Ix) -> Option<impl Iterator<Item = (&Ev, impl Iterator<Item = &St>)>> {
+        self.transitions.get(&ix).map(|transitions| transitions.iter().map(move |(ev, end_ixs)| (ev, end_ixs.iter().map(move |&end_ix| self._st(end_ix)))))
     }
 
-    pub(crate) fn get_grouped(&self, state: &S) -> Option<GetGrouped<'_, S, E>> {
-        if let Some(ix) = self.st_to_ix.get(state) {
-            Some(GetGrouped::new(&self.ix_to_st, self.transitions.get(ix).unwrap().iter()))
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn is_final(&self, state: &S) -> bool {
-        if let Some(ix) = self.st_to_ix.get(state) {
-            self.finals.contains(&ix)
-        } else {
-            false
-        }
-    }
-
-    pub(crate) fn contains(&self, state: &S) -> bool {
-        self.st_to_ix.contains_key(state)
+    pub(crate) fn is_final(&self, ix: Ix) -> bool {
+        self.finals.contains(&ix)
     }
 }
 
-pub(crate) struct Transitions<'a, S, E> {
-    iter: Box<(dyn Iterator<Item = (&'a S, &'a E, &'a S)> + 'a)>,
-}
+pub(crate) type ENFA<St, Ev> = NFA<St, Option<Ev>>;
 
-impl<'a, S, E> Transitions<'a, S, E> {
-    fn new<I: Iterator<Item = (&'a usize, &'a BTreeMap<E, BTreeSet<usize>>)> + 'a>(ix_to_st: &'a Vec<Rc<S>>, iter: I) -> Self {
-        Self {
-            iter: Box::new(iter.flat_map(move |(start_ix, transitions)| transitions.iter().flat_map(move |(event, end_ixs)| end_ixs.iter().map(move |end_ix| (&*ix_to_st[*start_ix], event, &*ix_to_st[*end_ix]))))),
-        }
+impl<St, Ev> ENFA<St, Ev>
+where
+    St: Ord,
+    Ev: Ord,
+{
+    pub(crate) fn get_closure(&self, ix: Ix) -> Option<impl Iterator<Item = &St>> {
+        self.st(ix).map(|st| {
+            let mut stack = vec![st];
+            let mut closure = BTreeSet::new();
+            while let Some(start_st) = stack.pop() {
+                closure.insert(start_st);
+                for (ev, end_st) in self.get_outgoing_flat(self._ix(start_st)).unwrap() {
+                    if ev.is_none() && !closure.contains(&end_st) {
+                        stack.push(end_st);
+                    }
+                }
+            }
+            closure.into_iter()
+        })
     }
 }
 
-impl<'a, S, E> Iterator for Transitions<'a, S, E> {
-    type Item = (&'a S, &'a E, &'a S);
-
-    fn next(&mut self) -> Option<(&'a S, &'a E, &'a S)> {
-        self.iter.next()
-    }
-}
-
-pub(crate) struct Finals<'a, S> {
-    iter: Box<(dyn Iterator<Item = &'a S> + 'a)>,
-}
-
-impl<'a, S> Finals<'a, S> {
-    fn new<I: Iterator<Item = &'a usize> + 'a>(ix_to_st: &'a Vec<Rc<S>>, iter: I) -> Self {
-        Self {
-            iter: Box::new(iter.map(move |ix| &*ix_to_st[*ix])),
-        }
-    }
-}
-
-impl<'a, S> Iterator for Finals<'a, S> {
-    type Item = &'a S;
-
-    fn next(&mut self) -> Option<&'a S> {
-        self.iter.next()
-    }
-}
-
-pub(crate) struct GetFlat<'a, S, E> {
-    iter: Box<(dyn Iterator<Item = (&'a E, &'a S)> + 'a)>,
-}
-
-impl<'a, S, E> GetFlat<'a, S, E> {
-    fn new<I: Iterator<Item = (&'a E, &'a BTreeSet<usize>)> + 'a>(ix_to_st: &'a Vec<Rc<S>>, iter: I) -> Self {
-        Self {
-            iter: Box::new(iter.flat_map(move |(event, end_ixs)| end_ixs.iter().map(move |end_ix| (event, &*ix_to_st[*end_ix])))),
-        }
-    }
-}
-
-impl<'a, S, E> Iterator for GetFlat<'a, S, E> {
-    type Item = (&'a E, &'a S);
-
-    fn next(&mut self) -> Option<(&'a E, &'a S)> {
-        self.iter.next()
-    }
-}
-
-pub(crate) struct GetGrouped<'a, S, E> {
-    iter: Box<(dyn Iterator<Item = (&'a E, Group<'a, S>)> + 'a)>,
-}
-
-impl<'a, S, E> GetGrouped<'a, S, E> {
-    fn new<I: Iterator<Item = (&'a E, &'a BTreeSet<usize>)> + 'a>(ix_to_st: &'a Vec<Rc<S>>, iter: I) -> Self {
-        Self {
-            iter: Box::new(iter.map(move |(event, end_ixs)| (event, Group::new(ix_to_st, end_ixs.iter())))),
-        }
-    }
-}
-
-impl<'a, S, E> Iterator for GetGrouped<'a, S, E> {
-    type Item = (&'a E, Group<'a, S>);
-
-    fn next(&mut self) -> Option<(&'a E, Group<'a, S>)> {
-        self.iter.next()
-    }
-}
-
-pub(crate) struct Group<'a, S> {
-    iter: Box<(dyn Iterator<Item = &'a S> + 'a)>,
-}
-
-impl<'a, S> Group<'a, S> {
-    fn new<I: Iterator<Item = &'a usize> + 'a>(ix_to_st: &'a Vec<Rc<S>>, iter: I) -> Self {
-        Self {
-            iter: Box::new(iter.map(move |ix| &*ix_to_st[*ix])),
-        }
-    }
-}
-
-impl<'a, S> Iterator for Group<'a, S> {
-    type Item = &'a S;
-
-    fn next(&mut self) -> Option<&'a S> {
-        self.iter.next()
-    }
-}
-
-pub(crate) type ENFA<S, E> = NFA<S, Option<E>>;
-
-impl ENFA<usize, char> {
-    fn _from<I: Iterator<Item = usize>>(re: RE, ids: &mut I) -> Self {
+impl ENFA<u32, char> {
+    fn _from_re(re: RE, ids: &mut Range<u32>) -> ENFA<u32, char> {
         match re {
             RE::Epsilon => {
-                let eps_enfa_initial = ids.next().expect("no more ids");
-                let mut eps_enfa = ENFA::new(eps_enfa_initial);
-                let eps_enfa_final = ids.next().expect("no more ids");
-                eps_enfa.insert_final(eps_enfa_final);
-                eps_enfa.insert_transition(eps_enfa_initial, None, eps_enfa_final);
+                let mut eps_enfa = ENFA::new(ids.next().expect("no more ids"));
+                let eps_enfa_final_ix = eps_enfa.insert_state(ids.next().expect("no more ids"));
+                eps_enfa.set_final(eps_enfa_final_ix);
+                eps_enfa.insert_transition(INIT_IX, None, eps_enfa_final_ix);
                 eps_enfa
             },
             RE::Symbol { symbol } => {
-                let sym_enfa_initial = ids.next().expect("no more ids");
-                let mut sym_enfa = ENFA::new(sym_enfa_initial);
-                let sym_enfa_final = ids.next().expect("no more ids");
-                sym_enfa.insert_final(sym_enfa_final);
-                sym_enfa.insert_transition(sym_enfa_initial, Some(symbol), sym_enfa_final);
+                let mut sym_enfa = ENFA::new(ids.next().expect("no more ids"));
+                let sym_enfa_final_ix = sym_enfa.insert_state(ids.next().expect("no more ids"));
+                sym_enfa.set_final(sym_enfa_final_ix);
+                sym_enfa.insert_transition(INIT_IX, Some(symbol), sym_enfa_final_ix);
                 sym_enfa
             },
             RE::Alternation { res } => {
-                let alt_enfa_initial = ids.next().expect("no more ids");
-                let mut alt_enfa = ENFA::new(alt_enfa_initial);
-                let alt_enfa_final= ids.next().expect("no more ids");
-                alt_enfa.insert_final(alt_enfa_final);
+                let mut alt_enfa = ENFA::new(ids.next().expect("no more ids"));
+                let alt_enfa_final_ix = alt_enfa.insert_state(ids.next().expect("no more ids"));
+                alt_enfa.set_final(alt_enfa_final_ix);
                 for re in res {
-                    let re_enfa = ENFA::_from(re, ids);
-                    for (start, transitions) in re_enfa.transitions {
-                        for (event, ends) in transitions {
-                            for end in ends {
-                                alt_enfa.insert_transition(*re_enfa.ix_to_st[start], event, *re_enfa.ix_to_st[end]);
-                            }
+                    let re_enfa = ENFA::_from_re(re, ids);
+                    for (start_st, ev, end_st) in re_enfa.get_transitions() {
+                        match (alt_enfa.ix(start_st), alt_enfa.ix(end_st)) {
+                            (Some(start_ix), Some(end_ix)) => {
+                                alt_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
+                            (Some(start_ix), None) => {
+                                let end_ix = alt_enfa.insert_state(end_st.clone());
+                                alt_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
+                            (None, Some(end_ix)) => {
+                                let start_ix = alt_enfa.insert_state(start_st.clone());
+                                alt_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
+                            (None, None) => {
+                                let start_ix = alt_enfa.insert_state(start_st.clone());
+                                let end_ix = alt_enfa.insert_state(end_st.clone());
+                                alt_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
                         }
                     }
-                    alt_enfa.insert_transition(alt_enfa_initial, None, *re_enfa.ix_to_st[re_enfa.initial]);
-                    for re_enfa_final in re_enfa.finals {
-                        alt_enfa.insert_transition(*re_enfa.ix_to_st[re_enfa_final], None, alt_enfa_final);
+                    if let Some(re_enfa_initial_ix) = alt_enfa.ix(re_enfa.get_initial()) {
+                        alt_enfa.insert_transition(INIT_IX, None, re_enfa_initial_ix);
+                    } else {
+                        let re_enfa_initial_ix = alt_enfa.insert_state(re_enfa.get_initial().clone());
+                        alt_enfa.insert_transition(INIT_IX, None, re_enfa_initial_ix);
+                    }
+                    for re_enfa_final_st in re_enfa.get_finals() {
+                        if let Some(re_enfa_final_ix) = alt_enfa.ix(re_enfa_final_st) {
+                            alt_enfa.insert_transition(re_enfa_final_ix, None, alt_enfa_final_ix);
+                        } else {
+                            let re_enfa_final_ix = alt_enfa.insert_state(re_enfa_final_st.clone());
+                            alt_enfa.insert_transition(re_enfa_final_ix, None, alt_enfa_final_ix);
+                        }
                     }
                 }
                 alt_enfa
             },
             RE::Concatenation { res } => {
-                let cat_enfa_initial = ids.next().expect("no more ids");
-                let mut cat_enfa = ENFA::new(cat_enfa_initial);
-                let cat_enfa_final = ids.next().expect("no more ids");
-                cat_enfa.insert_final(cat_enfa_final);
-                let mut prev_re_enfa_finals = set![cat_enfa_initial];
+                let mut cat_enfa = ENFA::new(ids.next().expect("no more ids"));
+                let cat_enfa_final_ix = cat_enfa.insert_state(ids.next().expect("no more ids"));
+                cat_enfa.set_final(cat_enfa_final_ix);
+                let mut prev_re_enfa_final_ixs = set![INIT_IX];
                 for re in res {
-                    let re_enfa = ENFA::_from(re, ids);
-                    let re_enfa_finals = re_enfa.finals.iter().map(|f| *re_enfa.ix_to_st[*f]).collect();
-                    for (start, transitions) in re_enfa.transitions {
-                        for (event, ends) in transitions {
-                            for end in ends {
-                                cat_enfa.insert_transition(*re_enfa.ix_to_st[start], event, *re_enfa.ix_to_st[end]);
-                            }
+                    let re_enfa = ENFA::_from_re(re, ids);
+                    for (start_st, ev, end_st) in re_enfa.get_transitions() {
+                        match (cat_enfa.ix(start_st), cat_enfa.ix(end_st)) {
+                            (Some(start_ix), Some(end_ix)) => {
+                                cat_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
+                            (Some(start_ix), None) => {
+                                let end_ix = cat_enfa.insert_state(end_st.clone());
+                                cat_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
+                            (None, Some(end_ix)) => {
+                                let start_ix = cat_enfa.insert_state(start_st.clone());
+                                cat_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
+                            (None, None) => {
+                                let start_ix = cat_enfa.insert_state(start_st.clone());
+                                let end_ix = cat_enfa.insert_state(end_st.clone());
+                                cat_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                            },
                         }
                     }
-                    for prev_re_enfa_final in prev_re_enfa_finals {
-                        cat_enfa.insert_transition(prev_re_enfa_final, None, *re_enfa.ix_to_st[re_enfa.initial]);
+                    for prev_re_enfa_final_ix in prev_re_enfa_final_ixs {
+                        if let Some(re_enfa_initial_ix) = cat_enfa.ix(re_enfa.get_initial()) {
+                            cat_enfa.insert_transition(prev_re_enfa_final_ix, None, re_enfa_initial_ix);
+                        } else {
+                            let re_enfa_initial_ix = cat_enfa.insert_state(re_enfa.get_initial().clone());
+                            cat_enfa.insert_transition(prev_re_enfa_final_ix, None, re_enfa_initial_ix);
+                        }
                     }
-                    prev_re_enfa_finals = re_enfa_finals;
+                    prev_re_enfa_final_ixs = re_enfa.get_finals().map(|re_enfa_final| {
+                        if let Some(re_enfa_final_ix) = cat_enfa.ix(re_enfa_final) {
+                            re_enfa_final_ix
+                        } else {
+                            cat_enfa.insert_state(re_enfa_final.clone())
+                        }
+                    }).collect();
                 }
-                for prev_re_enfa_final in prev_re_enfa_finals {
-                    cat_enfa.insert_transition(prev_re_enfa_final, None, cat_enfa_final);
+                for prev_re_enfa_final_ix in prev_re_enfa_final_ixs {
+                    cat_enfa.insert_transition(prev_re_enfa_final_ix, None, cat_enfa_final_ix);
                 }
                 cat_enfa
             },
             RE::Repetition { re } => {
-                let rep_enfa_initial = ids.next().expect("no more ids");
-                let mut rep_enfa = ENFA::new(rep_enfa_initial);
-                let rep_enfa_final = ids.next().expect("no more ids");
-                rep_enfa.insert_final(rep_enfa_final);
-                let re_enfa = ENFA::_from(*re, ids);
-                for (start, transitions) in re_enfa.transitions {
-                    for (event, ends) in transitions {
-                        for end in ends {
-                            rep_enfa.insert_transition(*re_enfa.ix_to_st[start], event, *re_enfa.ix_to_st[end]);
+                let mut rep_enfa = ENFA::new(ids.next().expect("no more ids"));
+                let rep_enfa_final_ix = rep_enfa.insert_state(ids.next().expect("no more ids"));
+                rep_enfa.set_final(rep_enfa_final_ix);
+                let re_enfa = ENFA::_from_re(*re, ids);
+                for (start_st, ev, end_st) in re_enfa.get_transitions() {
+                    match (rep_enfa.ix(start_st), rep_enfa.ix(end_st)) {
+                        (Some(start_ix), Some(end_ix)) => {
+                            rep_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                        },
+                        (Some(start_ix), None) => {
+                            let end_ix = rep_enfa.insert_state(end_st.clone());
+                            rep_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                        },
+                        (None, Some(end_ix)) => {
+                            let start_ix = rep_enfa.insert_state(start_st.clone());
+                            rep_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                        },
+                        (None, None) => {
+                            let start_ix = rep_enfa.insert_state(start_st.clone());
+                            let end_ix = rep_enfa.insert_state(end_st.clone());
+                            rep_enfa.insert_transition(start_ix, ev.clone(), end_ix);
+                        },
+                    }
+                }
+                if let Some(re_enfa_initial_ix) = rep_enfa.ix(re_enfa.get_initial()) {
+                    rep_enfa.insert_transition(INIT_IX, None, re_enfa_initial_ix);
+                    for re_enfa_final in re_enfa.get_finals() {
+                        if let Some(re_enfa_final_ix) = rep_enfa.ix(re_enfa_final) {
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, rep_enfa_final_ix);
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, re_enfa_initial_ix);
+                        } else {
+                            let re_enfa_final_ix = rep_enfa.insert_state(re_enfa_final.clone());
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, rep_enfa_final_ix);
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, re_enfa_initial_ix);
+                        }
+                    }
+                } else {
+                    let re_enfa_initial_ix = rep_enfa.insert_state(re_enfa.get_initial().clone());
+                    rep_enfa.insert_transition(INIT_IX, None, re_enfa_initial_ix);
+                    for re_enfa_final in re_enfa.get_finals() {
+                        if let Some(re_enfa_final_ix) = rep_enfa.ix(re_enfa_final) {
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, rep_enfa_final_ix);
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, re_enfa_initial_ix);
+                        } else {
+                            let re_enfa_final_ix = rep_enfa.insert_state(re_enfa_final.clone());
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, rep_enfa_final_ix);
+                            rep_enfa.insert_transition(re_enfa_final_ix, None, re_enfa_initial_ix);
                         }
                     }
                 }
-                rep_enfa.insert_transition(rep_enfa_initial, None, *re_enfa.ix_to_st[re_enfa.initial]);
-                for re_enfa_final in re_enfa.finals {
-                    rep_enfa.insert_transition(*re_enfa.ix_to_st[re_enfa_final], None, rep_enfa_final);
-                    rep_enfa.insert_transition(*re_enfa.ix_to_st[re_enfa_final], None, *re_enfa.ix_to_st[re_enfa.initial]);
-                }
-                rep_enfa.insert_transition(rep_enfa_initial, None, rep_enfa_final);
+                rep_enfa.insert_transition(INIT_IX, None, rep_enfa_final_ix);
                 rep_enfa
             },
         }
     }
 }
 
-impl From<RE> for ENFA<usize, char> {
-    fn from(re: RE) -> Self {
-        ENFA::_from(re, &mut (0..usize::MAX))
+impl From<RE> for ENFA<u32, char> {
+    fn from(re: RE) -> ENFA<u32, char> {
+        ENFA::_from_re(re, &mut (0..u32::MAX))
     }
 }
-
-// impl<S, E> ENFA<S, E>
-// where
-//     S: Clone + Ord,
-//     E: Ord
-// {
-//     fn closure(&self, start: &S) -> BTreeSet<S> {
-//         let mut starts = vec![start.clone()];
-//         let mut closure = BTreeSet::new();
-//         while let Some(start) = starts.pop() {
-//             closure.insert(start.clone());
-//             if let Some(transitions) = self.get(&start) {
-//                 for (event, ends) in transitions {
-//                     if event.is_none() {
-//                         for end in ends {
-//                             if !closure.contains(end) {
-//                                 starts.push(end.clone());
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//         closure
-//     }
-// }
-// 
-// impl<S, E> From<ENFA<S, E>> for NFA<BTreeSet<S>, E> 
-// where
-//     S: Clone + Ord,
-//     E: Clone + Ord
-// {
-//     fn from(enfa: ENFA<S, E>) -> NFA<BTreeSet<S>, E> {
-//         let mut start_sets = vec![enfa.closure(enfa.initial())];
-//         let mut transitions = BTreeMap::new();
-//         let mut finals = BTreeSet::new();
-//         while let Some(start_set) = start_sets.pop() {
-//             transitions.insert(start_set.clone(), BTreeMap::new());
-//             for start in &start_set {
-//                 for (event, end_set) in enfa.get(&start).unwrap().clone() {
-//                     if let Some(event) = event {
-//                         transitions.get_mut(&start_set).unwrap().insert(event.clone(), BTreeSet::new());
-//                         for end in end_set {
-//                             let closure = enfa.closure(&end);
-//                             if !transitions.contains_key(&closure) {
-//                                 start_sets.push(closure.clone());
-//                             }
-//                             transitions.get_mut(&start_set).unwrap().get_mut(&event).unwrap().insert(closure);
-//                         }
-//                     }
-//                 }
-//                 if enfa.is_final(&start) {
-//                     finals.insert(start_set.clone());
-//                 }
-//             }
-//         }
-//         NFA {
-//             initial: enfa.closure(enfa.initial()),
-//             transitions,
-//             finals,
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -372,28 +301,28 @@ mod tests {
     use crate::nfa::ENFA;
     use crate::re::RE;
 
-    struct Expected<'a> {
-        initial: &'a usize,
-        transitions: BTreeSet<(&'a usize, &'a Option<char>, &'a usize)>,
-        finals: BTreeSet<&'a usize>,
+    struct Expected {
+        initial: u32,
+        transitions: BTreeSet<(u32, Option<char>, u32)>,
+        finals: BTreeSet<u32>
     }
 
-    type Actual = ENFA<usize, char>;
+    type Actual = ENFA<u32, char>;
 
     fn assert_eq(expected: Expected, actual: Actual) {
-        assert_eq!(expected.initial, actual.initial());
-        assert_eq!(expected.transitions, actual.transitions().collect());
-        assert_eq!(expected.finals, actual.finals().collect());
+        assert_eq!(expected.initial, *actual.get_initial());
+        assert_eq!(expected.transitions, actual.get_transitions().map(|(&start_st, &ev, &end_st)| (start_st, ev, end_st)).collect());
+        assert_eq!(expected.finals, actual.get_finals().map(|&final_st| final_st).collect());
     }
 
     #[test]
     fn test_1() {
         let expected = Expected {
-            initial: &0,
+            initial: 0,
             transitions: set![
-                (&0, &None,      &1)
+                (0, None,      1)
             ],
-            finals: set![&1],
+            finals: set![1]
         };
         let actual = ENFA::from(RE::Epsilon);
         assert_eq(expected, actual);
@@ -402,11 +331,11 @@ mod tests {
     #[test]
     fn test_2() {
         let expected = Expected {
-            initial: &0,
+            initial: 0,
             transitions: set![
-                (&0, &Some('A'), &1)
+                (0, Some('A'), 1)
             ],
-            finals: set![&1],
+            finals: set![1]
         };
         let actual = ENFA::from(RE::Symbol { symbol: 'A' });
         assert_eq(expected, actual);
@@ -415,22 +344,22 @@ mod tests {
     #[test]
     fn test_3() {
         let expected = Expected {
-            initial: &0,
+            initial: 0,
             transitions: set![
-                (&0, &None,      &2),
-                (&0, &None,      &4),
-                (&2, &None,      &3),
-                (&4, &Some('A'), &5),
-                (&3, &None,      &1),
-                (&5, &None,      &1)
+                (0, None,      2),
+                (0, None,      4),
+                (2, None,      3),
+                (4, Some('A'), 5),
+                (3, None,      1),
+                (5, None,      1)
             ],
-            finals: set![&1],
+            finals: set![1]
         };
         let actual = ENFA::from(RE::Alternation {
             res: vec![
                 RE::Epsilon,
-                RE::Symbol { symbol: 'A' },
-            ],
+                RE::Symbol { symbol: 'A' }
+            ]
         });
         assert_eq(expected, actual);
     }
@@ -438,21 +367,21 @@ mod tests {
     #[test]
     fn test_4() {
         let expected = Expected {
-            initial: &0,
+            initial: 0,
             transitions: set![
-                (&0, &None,      &2),
-                (&2, &Some('A'), &3),
-                (&3, &None,      &4),
-                (&4, &None,      &5),
-                (&5, &None,      &1)
+                (0, None,      2),
+                (2, Some('A'), 3),
+                (3, None,      4),
+                (4, None,      5),
+                (5, None,      1)
             ],
-            finals: set![&1],
+            finals: set![1]
         };
         let actual = ENFA::from(RE::Concatenation {
             res: vec![
                 RE::Symbol { symbol: 'A' },
-                RE::Epsilon,
-            ],
+                RE::Epsilon
+            ]
         });
         assert_eq(expected, actual);
     }
@@ -460,18 +389,18 @@ mod tests {
     #[test]
     fn test_5() {
         let expected = Expected {
-            initial: &0,
+            initial: 0,
             transitions: set![
-                (&0, &None,      &1),
-                (&0, &None,      &2),
-                (&2, &Some('A'), &3),
-                (&3, &None,      &2),
-                (&3, &None,      &1)
+                (0, None,      1),
+                (0, None,      2),
+                (2, Some('A'), 3),
+                (3, None,      2),
+                (3, None,      1)
             ],
-            finals: set![&1],
+            finals: set![1]
         };
         let actual = ENFA::from(RE::Repetition {
-            re: Box::new(RE::Symbol { symbol: 'A' }),
+            re: Box::new(RE::Symbol { symbol: 'A' })
         });
         assert_eq(expected, actual);
     }
