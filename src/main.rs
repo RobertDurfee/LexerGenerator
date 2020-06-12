@@ -4,8 +4,7 @@
 mod util;
 mod error;
 mod re;
-mod nfa;
-mod dfa;
+mod fa;
 
 fn main() {
     println!("Hello, world!");
