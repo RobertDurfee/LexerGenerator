@@ -1,7 +1,9 @@
 use std::collections::{
     BTreeMap as Map,
     BTreeSet as Set,
+    VecDeque,
 };
+use std::fmt::Debug;
 
 use regular_expression::re::RE;
 use finite_automata::{
@@ -43,7 +45,7 @@ impl<'a, T> Iterator for TokenIds<'a, T> {
     }
 }
 
-pub fn lex<T: Clone + Ord>(input: &str, productions: &Map<RE, Option<T>>) -> Result<Vec<T>> {
+pub fn lex<T: Clone + Debug + Ord>(input: &str, productions: &Map<RE, Option<T>>) -> Result<Vec<T>> {
     let mut res = Vec::new();
     for (re, token) in productions {
         res.push(re.into_enfa(&mut TokenIds::new(token)));
@@ -60,9 +62,9 @@ pub fn lex<T: Clone + Ord>(input: &str, productions: &Map<RE, Option<T>>) -> Res
     }
     let dfa: DFA<Set<(&Option<T>, u32)>, char> = DFA::from(alt);
     let mut tokens = Vec::new();
-    let mut characters: Vec<char> = input.chars().collect();
+    let mut characters: VecDeque<char> = input.chars().collect();
     let mut source_index = dfa.initial_index();
-    while let Some(character) = characters.pop() {
+    while let Some(character) = characters.pop_front() {
         if let Some(transition_index) = dfa.contains(&(source_index, &character)) {
             let (_, _, target_index) = dfa.at(transition_index);
             source_index = target_index;
@@ -72,16 +74,16 @@ pub fn lex<T: Clone + Ord>(input: &str, productions: &Map<RE, Option<T>>) -> Res
                 let token = tokens_iter.next().unwrap();
                 while let Some(current_token) = tokens_iter.next() {
                     if current_token != token {
-                        return Err(Error::from(ErrorKind::InconsistentTokensInFinalState));
+                        return Err(Error::new(ErrorKind::InconsistentTokensInFinalState, format!("{:?} != {:?}", current_token, token)));
                     }
                 }
                 if let Some(token) = token {
                     tokens.push(token.clone());
                 }
                 source_index = dfa.initial_index();
-                characters.push(character);
+                characters.push_front(character);
             } else {
-                return Err(Error::from(ErrorKind::FailedToReachFinalState));
+                return Err(Error::new(ErrorKind::FailedToReachFinalState, format!("{:?}", dfa.at(source_index))));
             }
         }
     }
@@ -90,14 +92,14 @@ pub fn lex<T: Clone + Ord>(input: &str, productions: &Map<RE, Option<T>>) -> Res
         let token = tokens_iter.next().unwrap();
         while let Some(current_token) = tokens_iter.next() {
             if current_token != token {
-                return Err(Error::from(ErrorKind::InconsistentTokensInFinalState));
+                return Err(Error::new(ErrorKind::InconsistentTokensInFinalState, format!("{:?} != {:?}", current_token, token)));
             }
         }
         if let Some(token) = token {
             tokens.push(token.clone());
         }
     } else {
-        return Err(Error::from(ErrorKind::FailedToReachFinalState));
+        return Err(Error::new(ErrorKind::FailedToReachFinalState, format!("{:?}", dfa.at(source_index))));
     }
     Ok(tokens)
 }
@@ -108,22 +110,61 @@ pub fn productions<T>(_input: &str) -> Result<Map<RE, Option<T>>> {
 
 #[cfg(test)]
 mod tests {
-    use regular_expression::{sym, rep};
+    use regular_expression::{sym, rep, cat};
 
     use crate::{Result, lex};
 
     #[test]
     fn test_1() -> Result<()> {
         #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-        enum Binary {
+        enum Token {
             ZERO,
             ONE,
         };
-        let expected = vec![Binary::ZERO, Binary::ONE, Binary::ZERO];
+        let expected = vec![Token::ZERO, Token::ONE, Token::ZERO];
         let actual = lex("0 1  0   ", &map![
-            sym!('0') => Some(Binary::ZERO),
-            sym!('1') => Some(Binary::ONE),
+            sym!('0') => Some(Token::ZERO),
+            sym!('1') => Some(Token::ONE),
             rep!(sym!(' ')) => None
+        ]);
+        assert_eq!(expected, actual?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_2() -> Result<()> {
+        #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+        #[allow(non_camel_case_types)]
+        enum Token {
+            ZERO_REP,
+            ONE_REP
+        };
+        let expected = vec![Token::ZERO_REP, Token::ONE_REP, Token::ONE_REP];
+        let actual = lex("00000001111   1111", &map![
+            rep!(sym!('0')) => Some(Token::ZERO_REP),
+            rep!(sym!('1')) => Some(Token::ONE_REP),
+            rep!(sym!(' ')) => None
+        ]);
+        assert_eq!(expected, actual?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_3() -> Result<()> {
+        #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+        #[allow(non_camel_case_types)]
+        enum Token {
+            ZERO,
+            ZERO_ONE,
+            ONE_ONE,
+            ONE,
+        };
+        let expected = vec![Token::ZERO_ONE, Token::ONE];
+        let actual = lex("011", &map![
+            sym!('0') => Some(Token::ZERO),
+            cat![sym!('0'), sym!('1')] => Some(Token::ZERO_ONE),
+            cat![sym!('1'), sym!('1')] => Some(Token::ONE_ONE),
+            sym!('1') => Some(Token::ONE)
         ]);
         assert_eq!(expected, actual?);
         Ok(())
