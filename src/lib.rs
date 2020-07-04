@@ -190,7 +190,7 @@ pub fn compile<T: Copy + Ord>(productions: &Map<RE, Option<T>>) -> Result<DFA<Se
 
 #[cfg(test)]
 mod tests {
-    use regular_expression::{sym, rep, cat};
+    use regular_expression::{sym, rep, cat, alt};
 
     use crate::{Result, lex, compile};
 
@@ -245,6 +245,69 @@ mod tests {
             cat![sym!('0'), sym!('1')] => Some(Token::ZERO_ONE),
             cat![sym!('1'), sym!('1')] => Some(Token::ONE_ONE),
             sym!('1') => Some(Token::ONE)
+        ])?);
+        assert_eq!(expected, actual?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_4() -> Result<()> {
+        #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+        #[allow(non_camel_case_types)]
+        #[allow(dead_code)]
+        enum Token {
+            PRODUCTION_OPERATOR,
+            TOKEN,
+            SEMICOLON,
+            VERTICAL_BAR,
+            ASTERISK,
+            PLUS_SIGN,
+            QUESTION_MARK,
+            CARET,
+            DOLLAR_SIGN,
+            FULL_STOP,
+            LEFT_PARENTHESIS,
+            RIGHT_PARENTHESIS,
+            LEFT_SQUARE_BRACKET,
+            RIGHT_SQUARE_BRACKET,
+            HYPHEN,
+            UNESCAPED_LITERAL,
+            ESCAPED_LITERAL,
+            CONTROL_LITERAL,
+            OCTAL_LITERAL,
+            HEXADECIMAL_LITERAL,
+            UNICODE_LITERAL,
+            LEFT_CURLY_BRACKET,
+            RIGHT_CURLY_BRACKET,
+            COMMA,
+            INTEGER,
+        };
+        use Token::*;
+        let expected = vec![UNESCAPED_LITERAL, UNESCAPED_LITERAL, UNESCAPED_LITERAL, PRODUCTION_OPERATOR, TOKEN, SEMICOLON]; 
+        let actual = lex("abc => ABC;", &compile(&map![
+            cat![sym!('='), sym!('>')] => Some(PRODUCTION_OPERATOR),
+            cat![alt![sym!('A'), sym!('B'), sym!('C') /* ... */], rep!(alt![sym!('A'), sym!('B'), sym!('C') /* ... */])] => Some(TOKEN),
+            sym!(';') => Some(SEMICOLON),
+            sym!('|') => Some(VERTICAL_BAR),
+            sym!('*') => Some(ASTERISK),
+            sym!('+') => Some(PLUS_SIGN),
+            sym!('?') => Some(QUESTION_MARK),
+            sym!('^') => Some(CARET),
+            sym!('$') => Some(DOLLAR_SIGN),
+            sym!('.') => Some(FULL_STOP),
+            sym!('(') => Some(LEFT_PARENTHESIS),
+            sym!(')') => Some(RIGHT_PARENTHESIS),
+            sym!('[') => Some(LEFT_SQUARE_BRACKET),
+            sym!(']') => Some(RIGHT_SQUARE_BRACKET),
+            sym!('-') => Some(HYPHEN),
+            alt![sym!('a'), sym!('b'), sym!('c') /* ... */] => Some(UNESCAPED_LITERAL),
+            cat![sym!('\\'), alt![sym!('.'), sym!('^'), sym!('$') /* ... */]] => Some(ESCAPED_LITERAL),
+            cat![sym!('\\'), alt![sym!('n'), sym!('r'), sym!('t') /* ... */]] => Some(CONTROL_LITERAL),
+            sym!('{') => Some(LEFT_CURLY_BRACKET),
+            sym!('}') => Some(RIGHT_CURLY_BRACKET),
+            sym!(',') => Some(COMMA),
+            cat![alt![sym!('0'), sym!('1'), sym!('2') /* ... */], rep!(alt![sym!('1'), sym!('2'), sym!('3') /* ... */])] => Some(INTEGER),
+            rep!(sym!(' ')) => None
         ])?);
         assert_eq!(expected, actual?);
         Ok(())
