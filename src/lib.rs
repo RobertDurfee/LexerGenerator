@@ -1,9 +1,11 @@
-use std::collections::{
-    BTreeMap as Map,
-    BTreeSet as Set,
-    VecDeque,
+use std::{
+    collections::{
+        BTreeMap as Map,
+        BTreeSet as Set,
+        VecDeque,
+    },
+    fmt::Debug,
 };
-use std::fmt::Debug;
 
 use uuid::Uuid;
 
@@ -12,13 +14,12 @@ use regular_expression::{
     StateGenerator,
 };
 use finite_automata::{
-    ENFA,
-    DFA,
+    Etr,
+    Tr,
     Subsume,
-    ContainsFrom,
-    Insert,
-    Contains,
-    At,
+    states_contains_from,
+    Enfa,
+    Dfa,
 };
 
 #[macro_use]
@@ -114,18 +115,18 @@ impl<'a, T: Copy> StateGenerator for TokenStateGenerator<'a, T> {
     }
 }
 
-pub fn lex<T: Copy + Debug + Ord>(input: &str, dfa: &DFA<Set<TokenState<'_, T>>, char>) -> Result<Vec<T>> {
+pub fn lex<T: Copy + Debug + Ord>(input: &str, dfa: &Dfa<Set<TokenState<'_, T>>, char>) -> Result<Vec<T>> {
     let mut tokens = Vec::new();
     let mut characters: VecDeque<char> = input.chars().collect();
     let mut source_index = dfa.initial_index();
     while let Some(character) = characters.pop_front() {
-        if let Some(transition_index) = dfa.contains(&(source_index, &character)) {
-            let (_, _, target_index) = dfa.at(transition_index);
+        if let Some(transition_index) = dfa.transitions_contains_outgoing((source_index, &Tr::Some(character))) {
+            let (_, _, target_index) = dfa.transitions_index(transition_index);
             source_index = target_index;
         } else {
             if dfa.is_final(source_index) {
                 let mut token = &None;
-                for token_state in dfa.at(source_index) {
+                for token_state in dfa.states_index(source_index) {
                     if token.is_none() {
                         token = token_state.token();
                     } else {
@@ -140,13 +141,13 @@ pub fn lex<T: Copy + Debug + Ord>(input: &str, dfa: &DFA<Set<TokenState<'_, T>>,
                 source_index = dfa.initial_index();
                 characters.push_front(character);
             } else {
-                return Err(Error::new(ErrorKind::FailedToReachFinalState, format!("{:?}", dfa.at(source_index))));
+                return Err(Error::new(ErrorKind::FailedToReachFinalState, format!("{:?}", dfa.states_index(source_index))));
             }
         }
     }
     if dfa.is_final(source_index) {
         let mut token = &None;
-        for token_state in dfa.at(source_index) {
+        for token_state in dfa.states_index(source_index) {
             if token.is_none() {
                 token = token_state.token();
             } else {
@@ -159,28 +160,27 @@ pub fn lex<T: Copy + Debug + Ord>(input: &str, dfa: &DFA<Set<TokenState<'_, T>>,
             tokens.push(token.clone());
         }
     } else {
-        return Err(Error::new(ErrorKind::FailedToReachFinalState, format!("{:?}", dfa.at(source_index))));
+        return Err(Error::new(ErrorKind::FailedToReachFinalState, format!("{:?}", dfa.states_index(source_index))));
     }
     Ok(tokens)
 }
 
-pub fn compile<T: Copy + Ord>(productions: &Map<RE, Option<T>>) -> Result<DFA<Set<TokenState<'_, T>>, char>> {
+pub fn compile<T: Copy + Ord>(productions: &Map<RE, Option<T>>) -> Result<Dfa<Set<TokenState<'_, T>>, char>> {
     let mut res = Vec::new();
     for (re, token) in productions {
         res.push(re.into_enfa(&mut TokenStateGenerator::new(token)));
     }
-    let mut alt = ENFA::new(TokenState::new(&None));
+    let mut alt = Enfa::new(TokenState::new(&None));
     for re in res {
         alt.subsume(&re);
-        let re_initial_index = alt.contains_from(&re, re.initial_index()).expect("state does not exist");
-        alt.insert((alt.initial_index(), None, re_initial_index));
+        let re_initial_index = states_contains_from(&alt, &re, re.initial_index()).expect("state does not exist");
+        alt.transitions_insert((alt.initial_index(), Etr::None, re_initial_index));
         for re_final_index in re.final_indices() {
-            let re_final_index = alt.contains_from(&re, re_final_index).expect("state does not exist");
+            let re_final_index = states_contains_from(&alt, &re, re_final_index).expect("state does not exist");
             alt.set_final(re_final_index);
         }
     }
-    let dfa: DFA<Set<TokenState<'_, T>>, char> = DFA::from(alt);
-    Ok(dfa)
+    Ok(Dfa::from(&alt))
 }
 
 // TODO: this should compile from a lexer grammar instead
