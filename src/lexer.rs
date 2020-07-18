@@ -27,12 +27,6 @@ pub struct Lexer<T> {
     dfa: Option<Dfa<Set<TokenState<T>>, u32>>
 }
 
-impl<T> From<Map<Re, Option<T>>> for Lexer<T> {
-    fn from(productions: Map<Re, Option<T>>) -> Lexer<T> {
-        Lexer { productions, dfa: None }
-    }
-}
-
 impl<T: Clone + Ord> Lexer<T> {
     pub fn new(_productions: &str) -> Lexer<T> {
         panic!("Not implemented")
@@ -111,6 +105,10 @@ impl<T: Clone + Ord> Lexer<T> {
             Err(Error::from(ErrorKind::NotCompiled))
         }
     }
+
+    pub fn from_productions(productions: Map<Re, Option<T>>) -> Lexer<T> {
+        Lexer { productions, dfa: None }
+    }
 }
 
 #[cfg(test)]
@@ -133,7 +131,7 @@ mod tests {
             A,
             B,
         };
-        let mut lexer = Lexer::from(map![
+        let mut lexer = Lexer::from_productions(map![
             sym![Interval::singleton(A)] => Some(Token::A),
             sym![Interval::singleton(B)] => Some(Token::B),
             rep!(sym![Interval::singleton(SPACE)]) => None
@@ -151,7 +149,7 @@ mod tests {
             A_REP,
             B_REP
         };
-        let mut lexer = Lexer::from(map![
+        let mut lexer = Lexer::from_productions(map![
             rep!(sym![Interval::singleton(A)]) => Some(Token::A_REP),
             rep!(sym![Interval::singleton(B)]) => Some(Token::B_REP),
             rep!(sym![Interval::singleton(SPACE)]) => None
@@ -171,7 +169,7 @@ mod tests {
             BB,
             B,
         };
-        let mut lexer = Lexer::from(map![
+        let mut lexer = Lexer::from_productions(map![
             sym![Interval::singleton(A)] => Some(Token::A),
             con![sym![Interval::singleton(A)], sym![Interval::singleton(B)]] => Some(Token::AB),
             con![sym![Interval::singleton(B)], sym![Interval::singleton(B)]] => Some(Token::BB),
