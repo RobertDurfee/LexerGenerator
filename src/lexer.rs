@@ -120,7 +120,6 @@ mod tests {
         sym,
         rep,
         con,
-        // alt,
     };
     use crate::{
         error::Result,
