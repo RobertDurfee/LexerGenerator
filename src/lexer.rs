@@ -34,7 +34,7 @@ impl<T> From<Map<Re, Option<T>>> for Lexer<T> {
 }
 
 impl<T: Clone + Ord> Lexer<T> {
-    pub fn parse(_productions: &str) -> Lexer<T> {
+    pub fn new(_productions: &str) -> Lexer<T> {
         panic!("Not implemented")
     }
 
