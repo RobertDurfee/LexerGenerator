@@ -10,6 +10,7 @@ pub enum ErrorKind {
     NotImplemented,
     InconsistentTokensInFinalState,
     FailedToReachFinalState,
+    NotCompiled,
 }
 
 impl ErrorKind {
@@ -18,6 +19,7 @@ impl ErrorKind {
             ErrorKind::NotImplemented => "not implemented",
             ErrorKind::InconsistentTokensInFinalState => "inconsistent tokens in final state",
             ErrorKind::FailedToReachFinalState => "failed to reach final state",
+            ErrorKind::NotCompiled => "not compiled",
         }
     }
 }

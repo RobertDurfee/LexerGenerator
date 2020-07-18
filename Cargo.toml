@@ -8,5 +8,6 @@ edition = "2018"
 
 [dependencies]
 uuid = { version = "0.8", features = ["v4"] }
+interval_map = { path = "../IntervalMap" }
 regular_expression = { path = "../RegularExpression" }
 finite_automata = { path = "../FiniteAutomata" }
