@@ -8,8 +8,7 @@ pub type Result<T> = result::Result<T, Error>;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
     NotImplemented,
-    InconsistentTokensInFinalState,
-    FailedToReachFinalState,
+    PartialMatch,
     NotCompiled,
 }
 
@@ -17,8 +16,7 @@ impl ErrorKind {
     pub fn as_str(&self) -> &'static str {
         match *self {
             ErrorKind::NotImplemented => "not implemented",
-            ErrorKind::InconsistentTokensInFinalState => "inconsistent tokens in final state",
-            ErrorKind::FailedToReachFinalState => "failed to reach final state",
+            ErrorKind::PartialMatch => "partial match",
             ErrorKind::NotCompiled => "not compiled",
         }
     }

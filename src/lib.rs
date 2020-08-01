@@ -7,26 +7,29 @@ pub mod util;
 pub mod error;
 pub mod lexer;
 
-pub use crate::lexer::Lexer;
+pub use crate::lexer::{
+    Token,
+    Lexer
+};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct TokenState<T> {
     uuid: u128,
     sequence_number: u128,
-    token: Option<T>,
+    token_kind: Option<T>,
 }
 
 impl<T: Clone> TokenState<T> {
-    fn new(token: Option<T>) -> TokenState<T> {
-        TokenState { uuid: Uuid::new_v4().as_u128(), sequence_number: 0, token }
+    fn new(token_kind: Option<T>) -> TokenState<T> {
+        TokenState { uuid: Uuid::new_v4().as_u128(), sequence_number: 0, token_kind }
     }
 
-    fn token(&self) -> &Option<T> {
-        &self.token
+    fn token_kind(&self) -> &Option<T> {
+        &self.token_kind
     }
 
-    fn clear_token(&mut self) {
-        self.token = None;
+    fn clear_token_kind(&mut self) {
+        self.token_kind = None;
     }
 }
 
@@ -55,7 +58,7 @@ impl<T: Clone> TokenStateGenerator<T> {
     fn next_final_disabled(&mut self) -> TokenState<T> {
         let mut next = self.token_state.clone();
         self.token_state += 1;
-        next.clear_token();
+        next.clear_token_kind();
         next
     }
 }
@@ -66,7 +69,7 @@ impl<T: Clone> StateGenerator for TokenStateGenerator<T> {
     fn next_initial(&mut self) -> TokenState<T> {
         let mut next = self.token_state.clone();
         self.token_state += 1;
-        next.clear_token();
+        next.clear_token_kind();
         next
     }
 
