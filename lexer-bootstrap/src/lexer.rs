@@ -10,7 +10,7 @@ use finite_automata::{
     Subsume,
     states_contains_from,
 };
-use regular_expression::Re;
+use re_bootstrap::Re;
 use crate::{
     error::{
         Result,
@@ -44,8 +44,8 @@ pub struct Lexer<T> {
 }
 
 impl<T: Clone + Ord> Lexer<T> {
-    pub fn new(_productions: &str) -> Lexer<T> {
-        panic!("Not implemented")
+    pub fn new(productions: Map<Re, Option<T>>) -> Lexer<T> {
+        Lexer { productions, dfa: None }
     }
 
     pub fn compile(&mut self) {
@@ -118,15 +118,11 @@ impl<T: Clone + Ord> Lexer<T> {
             Ok(tokens)
         } else { Err(Error::from(ErrorKind::NotCompiled)) }
     }
-
-    pub fn from_productions(productions: Map<Re, Option<T>>) -> Lexer<T> {
-        Lexer { productions, dfa: None }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use regular_expression::{
+    use re_bootstrap::{
         sym,
         rep,
         con,
@@ -150,7 +146,7 @@ mod tests {
             B,
         };
         use TokenKind::*;
-        let mut lexer = Lexer::from_productions(map![
+        let mut lexer = Lexer::new(map![
             sym![sgl!('A')] => Some(A),
             sym![sgl!('B')] => Some(B),
             ast!(sym![sgl!(' ')]) => None
@@ -175,7 +171,7 @@ mod tests {
             B_REP
         };
         use TokenKind::*;
-        let mut lexer = Lexer::from_productions(map![
+        let mut lexer = Lexer::new(map![
             ast!(sym![sgl!('A')]) => Some(A_REP),
             ast!(sym![sgl!('B')]) => Some(B_REP),
             ast!(sym![sgl!(' ')]) => None
@@ -202,7 +198,7 @@ mod tests {
             B,
         };
         use TokenKind::*;
-        let mut lexer = Lexer::from_productions(map![
+        let mut lexer = Lexer::new(map![
             sym![sgl!('A')] => Some(A),
             con![sym![sgl!('A')], sym![sgl!('B')]] => Some(AB),
             con![sym![sgl!('B')], sym![sgl!('B')]] => Some(BB),
@@ -247,7 +243,7 @@ mod tests {
             UNICODE_LITERAL,
         }
         use TokenKind::*;
-        let mut lexer = Lexer::from_productions(map![
+        let mut lexer = Lexer::new(map![
             sym![sgl!('.')] => Some(FULL_STOP),
             sym![sgl!('^')] => Some(CARET),
             sym![sgl!('$')] => Some(DOLLAR_SIGN),

@@ -1,6 +1,6 @@
 use std::ops::AddAssign;
 use uuid::Uuid;
-use regular_expression::StateGenerator;
+use re_bootstrap::StateGenerator;
 
 #[macro_use]
 pub mod util;
