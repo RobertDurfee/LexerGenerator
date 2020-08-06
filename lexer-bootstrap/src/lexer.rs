@@ -43,11 +43,13 @@ pub struct Lexer<T> {
     dfa: Option<Dfa<Set<TokenState<T>>, u32>>
 }
 
-impl<T: Clone + Ord> Lexer<T> {
+impl<T> Lexer<T> {
     pub fn new(productions: Map<Re, Option<T>>) -> Lexer<T> {
         Lexer { productions, dfa: None }
     }
+}
 
+impl<T: Clone + Ord> Lexer<T> {
     pub fn compile(&mut self) {
         if self.dfa.is_none() {
             let mut res = Vec::new();
