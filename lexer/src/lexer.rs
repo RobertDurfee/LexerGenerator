@@ -1,16 +1,17 @@
 use std::str::FromStr;
-use lexer_bootstrap::{
-    error::Result,
+use lexer_bootstrap::Lexer as LexerBootstrap;
+use crate::{
+    grammar::{
+        LEXER_PRODUCTIONS,
+        PARSER_PRODUCTIONS,
+        Nonterminal,
+        as_productions,
+    },
     Token,
-    Lexer as LexerBootstrap,
-};
-use crate::grammar::{
-    LEXER_PRODUCTIONS,
-    PARSER_PRODUCTIONS,
-    Nonterminal,
-    as_productions,
 };
 use parser_bootstrap::Parser;
+
+type Result<T> = std::result::Result<T, &'static str>;
 
 pub struct Lexer<T> {
     lexer: LexerBootstrap<T>
@@ -40,15 +41,11 @@ impl<T: Clone + Ord> Lexer<T> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
-    use lexer_bootstrap::{
-        error::{
-            Result,
-            Error,
-            ErrorKind,
-        },
+    use crate::{
+        Lexer,
         Token,
     };
-    use crate::Lexer;
+    use super::Result;
 
     #[test]
     fn test_1() -> Result<()> {
@@ -58,13 +55,13 @@ mod tests {
             B,
         };
         impl FromStr for TokenKind {
-            type Err = Error;
+            type Err = &'static str;
             fn from_str(text: &str) -> Result<Self> {
                 use TokenKind::*;
                 match text {
                     "A" => Ok(A),
                     "B" => Ok(B),
-                    _ => Err(Error::from(ErrorKind::NotTokenKind))
+                    _ => Err("not token kind")
                 }
             }
         }
@@ -94,13 +91,13 @@ mod tests {
             B_REP
         };
         impl FromStr for TokenKind {
-            type Err = Error;
+            type Err = &'static str;
             fn from_str(text: &str) -> Result<Self> {
                 use TokenKind::*;
                 match text {
                     "A_REP" => Ok(A_REP),
                     "B_REP" => Ok(B_REP),
-                    _ => Err(Error::from(ErrorKind::NotTokenKind))
+                    _ => Err("not token kind")
                 }
             }
         }
@@ -132,7 +129,7 @@ mod tests {
             B,
         };
         impl FromStr for TokenKind {
-            type Err = Error;
+            type Err = &'static str;
             fn from_str(text: &str) -> Result<Self> {
                 use TokenKind::*;
                 match text {
@@ -140,7 +137,7 @@ mod tests {
                     "AB" => Ok(AB),
                     "BB" => Ok(BB),
                     "B" => Ok(B),
-                    _ => Err(Error::from(ErrorKind::NotTokenKind))
+                    _ => Err("not token kind")
                 }
             }
         }
@@ -188,7 +185,7 @@ mod tests {
             UNICODE,
         }
         impl FromStr for TokenKind {
-            type Err = Error;
+            type Err = &'static str;
             fn from_str(text: &str) -> Result<Self> {
                 use TokenKind::*;
                 match text {
@@ -212,7 +209,7 @@ mod tests {
                     "OCTAL" => Ok(OCTAL),
                     "HEXADECIMAL" => Ok(HEXADECIMAL),
                     "UNICODE" => Ok(UNICODE),
-                    _ => Err(Error::from(ErrorKind::NotTokenKind))
+                    _ => Err("not token kind")
                 }
             }
         }

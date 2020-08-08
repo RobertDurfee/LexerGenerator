@@ -17,14 +17,6 @@ use re_bootstrap::{
     Expression,
 };
 use re::Re;
-use lexer_bootstrap::{
-    error::{
-        Result,
-        Error,
-        ErrorKind,
-    },
-    map,
-};
 use parser_bootstrap::{
     tok as ptok,
     non as pnon,
@@ -33,6 +25,9 @@ use parser_bootstrap::{
     ast as past,
     ParseTree,
 };
+use crate::map;
+
+type Result<T> = std::result::Result<T, &'static str>;
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -72,16 +67,16 @@ pub fn as_productions<T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>
                 Ok(map![as_expression(&children[0])? => None])
             },
         }
-    } else { Err(Error::from(ErrorKind::NoProductions)) }
+    } else { Err("no productions") }
 }
 
 fn as_expression(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Expression> {
     if let ParseTree::Token { token } = parse_tree {
         // /\/([^\/\n\r\\]|\\.)*\// => REGULAR_EXPRESSION;
         if let REGULAR_EXPRESSION = token.kind() {
-            Ok(Re::new(&token.text()[1..token.text().len()-1]).into_expression())
-        } else { Err(Error::from(ErrorKind::NotExpression)) }
-    } else { Err(Error::from(ErrorKind::NotExpression)) }
+            Ok(Re::new(&token.text()[1..token.text().len()-1])?.into_expression())
+        } else { Err("not expression") }
+    } else { Err("not expression") }
 }
 
 fn as_token_kind<T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<T> {
@@ -90,9 +85,9 @@ fn as_token_kind<T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> 
         if let TOKEN_KIND = token.kind() {
             if let Ok(token_kind) = T::from_str(token.text()) {
                 Ok(token_kind)
-            } else { Err(Error::from(ErrorKind::NotTokenKind)) }
-        } else { Err(Error::from(ErrorKind::NotTokenKind)) }
-    } else { Err(Error::from(ErrorKind::NotTokenKind)) }
+            } else { Err("not token kind") }
+        } else { Err("not token kind") }
+    } else { Err("not token kind") }
 }
 
 lazy_static! {

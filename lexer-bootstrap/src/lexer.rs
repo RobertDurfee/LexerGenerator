@@ -12,14 +12,11 @@ use finite_automata::{
 };
 use re_bootstrap::Expression;
 use crate::{
-    error::{
-        Result,
-        Error,
-        ErrorKind,
-    },
     TokenState,
     TokenStateGenerator,
 };
+
+type Result<T> = std::result::Result<T, &'static str>;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Token<T> {
@@ -93,7 +90,7 @@ impl<T: Clone + Ord> Lexer<T> {
                                 token_kind = token_state.token_kind();
                             } else {
                                 if token_state.token_kind().is_some() && token_state.token_kind() != token_kind {
-                                    panic!("inconsistent tokens in final state")
+                                    return Err("inconsistent tokens in final state");
                                 }
                             }
                         }
@@ -103,7 +100,7 @@ impl<T: Clone + Ord> Lexer<T> {
                         token_text.clear();
                         characters.push_front(character);
                         source_index = dfa.initial_index();
-                    } else { return Err(Error::from(ErrorKind::PartialMatch)); }
+                    } else { return Err("partial match"); }
                 }
             }
             if dfa.is_final(source_index) {
@@ -113,16 +110,16 @@ impl<T: Clone + Ord> Lexer<T> {
                         token_kind = token_state.token_kind();
                     } else {
                         if token_state.token_kind().is_some() && token_state.token_kind() != token_kind {
-                            panic!("inconsistent tokens in final state")
+                            return Err("inconsistent tokens in final state");
                         }
                     }
                 }
                 if let Some(token_kind) = token_kind {
                     tokens.push(Token::new(token_kind.clone(), token_text.as_str()));
                 }
-            } else { return Err(Error::from(ErrorKind::PartialMatch)); }
+            } else { return Err("partial match"); }
             Ok(tokens)
-        } else { Err(Error::from(ErrorKind::NotCompiled)) }
+        } else { Err("not compiled") }
     }
 }
 
@@ -139,10 +136,10 @@ mod tests {
         ast,
     };
     use crate::{
-        error::Result,
         Lexer,
         Token,
     };
+    use super::Result;
 
     #[test]
     fn test_1() -> Result<()> {

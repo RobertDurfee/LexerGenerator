@@ -4,7 +4,6 @@ use re_bootstrap::StateGenerator;
 
 #[macro_use]
 pub mod util;
-pub mod error;
 pub mod lexer;
 
 pub use crate::lexer::{
