@@ -17,20 +17,14 @@ pub struct Lexer<T> {
     lexer: LexerBootstrap<T>
 }
 
-impl<T: FromStr> Lexer<T> {
+impl<T: Clone + FromStr + Ord> Lexer<T> {
     pub fn new(productions: &str) -> Result<Lexer<T>> {
-        let mut lexer = LexerBootstrap::new(LEXER_PRODUCTIONS.clone()); lexer.compile();
+        let lexer = LexerBootstrap::new(LEXER_PRODUCTIONS.clone());
         let parser = Parser::new(PARSER_PRODUCTIONS.clone(), Nonterminal::Root);
         let tokens = lexer.lex(productions)?;
         let parse_tree = parser.parse(&tokens).unwrap();
         let productions = as_productions(&parse_tree)?;
         Ok(Lexer { lexer: LexerBootstrap::new(productions) })
-    }
-}
-
-impl<T: Clone + Ord> Lexer<T> {
-    pub fn compile(&mut self) {
-        self.lexer.compile()
     }
 
     pub fn lex(&self, text: &str) -> Result<Vec<Token<T>>> {
@@ -66,12 +60,11 @@ mod tests {
             }
         }
         use TokenKind::*;
-        let mut lexer = Lexer::new(r#"
+        let lexer = Lexer::new(r#"
             /A/ => A;
             /B/ => B;
             / / => ;
         "#)?;
-        lexer.compile();
         let expected = vec![
             Token::new(A, "A"),
             Token::new(B, "B"),
@@ -102,12 +95,11 @@ mod tests {
             }
         }
         use TokenKind::*;
-        let mut lexer = Lexer::new(r#"
+        let lexer = Lexer::new(r#"
             /A*/ => A_REP;
             /B*/ => B_REP;
             / / => ;
         "#)?;
-        lexer.compile();
         let expected = vec![
             Token::new(A_REP, "AAAAAAA"), 
             Token::new(B_REP, "BBBB"),
@@ -142,13 +134,12 @@ mod tests {
             }
         }
         use TokenKind::*;
-        let mut lexer = Lexer::new(r#"
+        let lexer = Lexer::new(r#"
             /A/ => A;
             /AB/ => AB;
             /BB/ => BB;
             /B/ => B;
         "#)?;
-        lexer.compile();
         let expected = vec![
             Token::new(AB, "AB"),
             Token::new(B, "B"),
@@ -214,7 +205,7 @@ mod tests {
             }
         }
         use TokenKind::*;
-        let mut lexer = Lexer::new(r#"
+        let lexer = Lexer::new(r#"
             /\|/ => VERTICAL_BAR;
             /\*/ => ASTERISK;
             /\+/ => PLUS_SIGN;
@@ -236,7 +227,6 @@ mod tests {
             /\\x[0-9a-fA-F]{1,2}/ => HEXADECIMAL;
             /\\(u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})/ => UNICODE;
         "#)?;
-        lexer.compile();
         let expected = vec![
             Token::new(LEFT_SQUARE_BRACKET, "["),
             Token::new(UNESCAPED, "A"),

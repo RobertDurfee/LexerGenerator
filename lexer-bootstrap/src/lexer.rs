@@ -41,85 +41,75 @@ impl<T> Token<T> {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Lexer<T> {
     productions: Map<Expression, Option<T>>,
-    dfa: Option<Dfa<Set<TokenState<T>>, u32>>
-}
-
-impl<T> Lexer<T> {
-    pub fn new(productions: Map<Expression, Option<T>>) -> Lexer<T> {
-        Lexer { productions, dfa: None }
-    }
+    dfa: Dfa<Set<TokenState<T>>, u32>
 }
 
 impl<T: Clone + Ord> Lexer<T> {
-    pub fn compile(&mut self) {
-        if self.dfa.is_none() {
-            let mut fas = Vec::new();
-            for (expression, token) in &self.productions {
-                fas.push(expression.as_enfa(&mut TokenStateGenerator::new(token.clone())));
-            }
-            let mut alt = Enfa::new(TokenState::new(None));
-            for fa in fas {
-                alt.subsume(&fa);
-                let fa_initial_index = states_contains_from(&alt, &fa, fa.initial_index()).expect("state does not exist");
-                alt.transitions_insert((alt.initial_index(), Interval::empty(), fa_initial_index));
-                for fa_final_index in fa.final_indices() {
-                    let fa_final_index = states_contains_from(&alt, &fa, fa_final_index).expect("state does not exist");
-                    alt.set_final(fa_final_index);
-                }
-            }
-            self.dfa = Some(Dfa::from(&alt));
+    pub fn new(productions: Map<Expression, Option<T>>) -> Lexer<T> {
+        let mut fas = Vec::new();
+        for (expression, token) in &productions {
+            fas.push(expression.as_enfa(&mut TokenStateGenerator::new(token.clone())));
         }
+        let mut alt = Enfa::new(TokenState::new(None));
+        for fa in fas {
+            alt.subsume(&fa);
+            let fa_initial_index = states_contains_from(&alt, &fa, fa.initial_index()).expect("state does not exist");
+            alt.transitions_insert((alt.initial_index(), Interval::empty(), fa_initial_index));
+            for fa_final_index in fa.final_indices() {
+                let fa_final_index = states_contains_from(&alt, &fa, fa_final_index).expect("state does not exist");
+                alt.set_final(fa_final_index);
+            }
+        }
+        Lexer { productions, dfa: Dfa::from(&alt) }
     }
 
     pub fn lex(&self, text: &str) -> Result<Vec<Token<T>>> {
-        if let Some(dfa) = self.dfa.as_ref() {
-            let mut tokens = Vec::new();
-            let mut token_text = String::from("");
-            let mut characters: VecDeque<char> = text.chars().collect();
-            let mut source_index = dfa.initial_index();
-            while let Some(character) = characters.pop_front() {
-                if let Some(transition_index) = dfa.transitions_contains_outgoing((source_index, &character.into())) {
-                    let (_, _, target_index) = dfa.transitions_index(transition_index);
-                    token_text.push(character);
-                    source_index = target_index;
-                } else {
-                    if dfa.is_final(source_index) {
-                        let mut token_kind = &None;
-                        for token_state in dfa.states_index(source_index) {
-                            if token_kind.is_none() {
-                                token_kind = token_state.token_kind();
-                            } else {
-                                if token_state.token_kind().is_some() && token_state.token_kind() != token_kind {
-                                    return Err("inconsistent tokens in final state");
-                                }
+        let mut tokens = Vec::new();
+        let mut token_text = String::from("");
+        let mut characters: VecDeque<char> = text.chars().collect();
+        let mut source_index = self.dfa.initial_index();
+        while let Some(character) = characters.pop_front() {
+            if let Some(transition_index) = self.dfa.transitions_contains_outgoing((source_index, &character.into())) {
+                let (_, _, target_index) = self.dfa.transitions_index(transition_index);
+                token_text.push(character);
+                source_index = target_index;
+            } else {
+                if self.dfa.is_final(source_index) {
+                    let mut token_kind = &None;
+                    for token_state in self.dfa.states_index(source_index) {
+                        if token_kind.is_none() {
+                            token_kind = token_state.token_kind();
+                        } else {
+                            if token_state.token_kind().is_some() && token_state.token_kind() != token_kind {
+                                return Err("inconsistent tokens in final state");
                             }
                         }
-                        if let Some(token_kind) = token_kind {
-                            tokens.push(Token::new(token_kind.clone(), token_text.as_str()));
-                        }
-                        token_text.clear();
-                        characters.push_front(character);
-                        source_index = dfa.initial_index();
-                    } else { return Err("partial match"); }
-                }
+                    }
+                    if let Some(token_kind) = token_kind {
+                        tokens.push(Token::new(token_kind.clone(), token_text.as_str()));
+                    }
+                    token_text.clear();
+                    characters.push_front(character);
+                    source_index = self.dfa.initial_index();
+                } else { return Err("partial match"); }
             }
-            if dfa.is_final(source_index) {
-                let mut token_kind = &None;
-                for token_state in dfa.states_index(source_index) {
-                    if token_kind.is_none() {
-                        token_kind = token_state.token_kind();
-                    } else {
-                        if token_state.token_kind().is_some() && token_state.token_kind() != token_kind {
-                            return Err("inconsistent tokens in final state");
-                        }
+        }
+        if self.dfa.is_final(source_index) {
+            let mut token_kind = &None;
+            for token_state in self.dfa.states_index(source_index) {
+                if token_kind.is_none() {
+                    token_kind = token_state.token_kind();
+                } else {
+                    if token_state.token_kind().is_some() && token_state.token_kind() != token_kind {
+                        return Err("inconsistent tokens in final state");
                     }
                 }
-                if let Some(token_kind) = token_kind {
-                    tokens.push(Token::new(token_kind.clone(), token_text.as_str()));
-                }
-            } else { return Err("partial match"); }
-            Ok(tokens)
-        } else { Err("not compiled") }
+            }
+            if let Some(token_kind) = token_kind {
+                tokens.push(Token::new(token_kind.clone(), token_text.as_str()));
+            }
+        } else { return Err("partial match"); }
+        Ok(tokens)
     }
 }
 
@@ -149,12 +139,11 @@ mod tests {
             B,
         };
         use TokenKind::*;
-        let mut lexer = Lexer::new(map![
+        let lexer = Lexer::new(map![
             sym![sgl!('A')] => Some(A),
             sym![sgl!('B')] => Some(B),
             ast!(sym![sgl!(' ')]) => None
         ]);
-        lexer.compile();
         let expected = vec![
             Token::new(A, "A"),
             Token::new(B, "B"),
@@ -174,12 +163,11 @@ mod tests {
             B_REP
         };
         use TokenKind::*;
-        let mut lexer = Lexer::new(map![
+        let lexer = Lexer::new(map![
             ast!(sym![sgl!('A')]) => Some(A_REP),
             ast!(sym![sgl!('B')]) => Some(B_REP),
             ast!(sym![sgl!(' ')]) => None
         ]);
-        lexer.compile();
         let expected = vec![
             Token::new(A_REP, "AAAAAAA"), 
             Token::new(B_REP, "BBBB"),
@@ -201,13 +189,12 @@ mod tests {
             B,
         };
         use TokenKind::*;
-        let mut lexer = Lexer::new(map![
+        let lexer = Lexer::new(map![
             sym![sgl!('A')] => Some(A),
             con![sym![sgl!('A')], sym![sgl!('B')]] => Some(AB),
             con![sym![sgl!('B')], sym![sgl!('B')]] => Some(BB),
             sym![sgl!('B')] => Some(B)
         ]);
-        lexer.compile();
         let expected = vec![
             Token::new(AB, "AB"),
             Token::new(B, "B"),
@@ -246,7 +233,7 @@ mod tests {
             UNICODE_LITERAL,
         }
         use TokenKind::*;
-        let mut lexer = Lexer::new(map![
+        let lexer = Lexer::new(map![
             sym![sgl!('.')] => Some(FULL_STOP),
             sym![sgl!('^')] => Some(CARET),
             sym![sgl!('$')] => Some(DOLLAR_SIGN),
@@ -270,7 +257,6 @@ mod tests {
             con![sym![sgl!('\\')], sym![sgl!('x')], rep!(sym![rng!('0', '9'), rng!('a', 'f'), rng!('A', 'F')], Some(1), Some(2))] => Some(HEXADECIMAL_LITERAL),
             con![sym![sgl!('\\')], alt![con![sym![sgl!('u')], rep!(sym![rng!('0', '9'), rng!('a', 'f'), rng!('A', 'F')], Some(4), Some(4))], con![sym![sgl!('U')], rep!(sym![rng!('0', '9'), rng!('a', 'f'), rng!('A', 'F')], Some(8), Some(8))]]] => Some(UNICODE_LITERAL)
         ]);
-        lexer.compile();
         let expected = vec![
             Token::new(LEFT_SQUARE_BRACKET, "["),
             Token::new(UNESCAPED_LITERAL, "A"),
