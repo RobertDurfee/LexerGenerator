@@ -4,7 +4,7 @@ use std::{
 };
 use lazy_static::lazy_static;
 use interval_map;
-use re_bootstrap::{
+use re::{
     sym as rsym,
     neg as rneg,
     alt as ralt,
