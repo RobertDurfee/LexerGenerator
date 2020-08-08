@@ -10,7 +10,7 @@ use finite_automata::{
     Subsume,
     states_contains_from,
 };
-use re_bootstrap::Re;
+use re_bootstrap::Expression;
 use crate::{
     error::{
         Result,
@@ -35,16 +35,20 @@ impl<T> Token<T> {
     pub fn kind(&self) -> &T {
         &self.kind
     }
+    
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Lexer<T> {
-    productions: Map<Re, Option<T>>,
+    productions: Map<Expression, Option<T>>,
     dfa: Option<Dfa<Set<TokenState<T>>, u32>>
 }
 
 impl<T> Lexer<T> {
-    pub fn new(productions: Map<Re, Option<T>>) -> Lexer<T> {
+    pub fn new(productions: Map<Expression, Option<T>>) -> Lexer<T> {
         Lexer { productions, dfa: None }
     }
 }
@@ -52,18 +56,18 @@ impl<T> Lexer<T> {
 impl<T: Clone + Ord> Lexer<T> {
     pub fn compile(&mut self) {
         if self.dfa.is_none() {
-            let mut res = Vec::new();
-            for (re, token) in &self.productions {
-                res.push(re.as_enfa(&mut TokenStateGenerator::new(token.clone())));
+            let mut fas = Vec::new();
+            for (expression, token) in &self.productions {
+                fas.push(expression.as_enfa(&mut TokenStateGenerator::new(token.clone())));
             }
             let mut alt = Enfa::new(TokenState::new(None));
-            for re in res {
-                alt.subsume(&re);
-                let re_initial_index = states_contains_from(&alt, &re, re.initial_index()).expect("state does not exist");
-                alt.transitions_insert((alt.initial_index(), Interval::empty(), re_initial_index));
-                for re_final_index in re.final_indices() {
-                    let re_final_index = states_contains_from(&alt, &re, re_final_index).expect("state does not exist");
-                    alt.set_final(re_final_index);
+            for fa in fas {
+                alt.subsume(&fa);
+                let fa_initial_index = states_contains_from(&alt, &fa, fa.initial_index()).expect("state does not exist");
+                alt.transitions_insert((alt.initial_index(), Interval::empty(), fa_initial_index));
+                for fa_final_index in fa.final_indices() {
+                    let fa_final_index = states_contains_from(&alt, &fa, fa_final_index).expect("state does not exist");
+                    alt.set_final(fa_final_index);
                 }
             }
             self.dfa = Some(Dfa::from(&alt));

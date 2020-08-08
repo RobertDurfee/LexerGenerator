@@ -10,5 +10,6 @@ edition = "2018"
 lazy_static = "1.4.0"
 interval-map = { path = "../../IntervalMap" }
 re-bootstrap = { path = "../../RegularExpression/re-bootstrap" }
+re = { path = "../../RegularExpression/re" }
 lexer-bootstrap = { path = "../lexer-bootstrap" }
 parser-bootstrap = { path = "../../ParserGenerator/parser-bootstrap" }

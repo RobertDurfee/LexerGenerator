@@ -10,6 +10,10 @@ pub enum ErrorKind {
     NotImplemented,
     PartialMatch,
     NotCompiled,
+    NoProductions,
+    NotExpression,
+    NotTokenKind,
+    ParserError,
 }
 
 impl ErrorKind {
@@ -18,6 +22,10 @@ impl ErrorKind {
             ErrorKind::NotImplemented => "not implemented",
             ErrorKind::PartialMatch => "partial match",
             ErrorKind::NotCompiled => "not compiled",
+            ErrorKind::NoProductions => "no productions",
+            ErrorKind::NotExpression => "not expression",
+            ErrorKind::NotTokenKind => "not token kind",
+            ErrorKind::ParserError => "parser error",
         }
     }
 }

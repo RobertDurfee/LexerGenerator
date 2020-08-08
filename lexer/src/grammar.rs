@@ -1,4 +1,7 @@
-use std::collections::BTreeMap as Map;
+use std::{
+    collections::BTreeMap as Map,
+    str::FromStr,
+};
 use lazy_static::lazy_static;
 use interval_map;
 use re_bootstrap::{
@@ -7,26 +10,32 @@ use re_bootstrap::{
     alt as ralt,
     con as rcon,
     ast as rast,
+    plu as rplu,
     sgl as rsgl,
     rng as rrng,
     all as rall,
-    Re,
+    Expression,
 };
+use re::Re;
 use lexer_bootstrap::{
-    error::Result,
+    error::{
+        Result,
+        Error,
+        ErrorKind,
+    },
     map,
 };
 use parser_bootstrap::{
     tok as ptok,
     non as pnon,
+    alt as palt,
     con as pcon,
     ast as past,
     ParseTree,
-    Expression,
 };
 
 #[allow(non_camel_case_types)]
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum TokenKind {
     REGULAR_EXPRESSION,
     PRODUCTION_OPERATOR,
@@ -35,49 +44,70 @@ pub enum TokenKind {
 }
 use TokenKind::*;
 
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Nonterminal {
-    Grammar,
+    Root,
     Production,
+    Consumption,
 }
 use Nonterminal::*;
 
-pub enum Grammar<T> {
-    Phantom(T),
+pub fn as_productions<T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Map<Expression, Option<T>>> {
+    if let ParseTree::Nonterminal { nonterminal, children, .. } = parse_tree {
+        match nonterminal {
+            // Root ::= (Production | Consumption)*;
+            Root => {
+                let mut productions = Map::new();
+                for child in children {
+                    productions.extend(as_productions(child)?);
+                }
+                Ok(productions)
+            },
+            // Production ::= REGULAR_EXPRESSION PRODUCTION_OPERATOR TOKEN_KIND SEMICOLON;
+            Production => {
+                Ok(map![as_expression(&children[0])? => Some(as_token_kind(&children[2])?)])
+            },
+            // Consumption ::= REGULAR_EXPRESSION PRODUCTION_OPERATOR SEMICOLON;
+            Consumption => {
+                Ok(map![as_expression(&children[0])? => None])
+            },
+        }
+    } else { Err(Error::from(ErrorKind::NoProductions)) }
 }
 
-impl<T> Grammar<T> {
-    pub fn new(_parse_tree: ParseTree<Nonterminal, TokenKind>) -> Result<Grammar<T>> {
-        panic!("Not implemented")
-    }
+fn as_expression(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Expression> {
+    if let ParseTree::Token { token } = parse_tree {
+        // /\/([^\/\n\r\\]|\\.)*\// => REGULAR_EXPRESSION;
+        if let REGULAR_EXPRESSION = token.kind() {
+            Ok(Re::new(&token.text()[1..token.text().len()-1]).into_expression())
+        } else { Err(Error::from(ErrorKind::NotExpression)) }
+    } else { Err(Error::from(ErrorKind::NotExpression)) }
+}
 
-    pub fn productions(&self) -> Result<Map<Re, Option<T>>> {
-        panic!("Not implemented")
-    }
-
-    fn re(&self) -> Result<Re> {
-        panic!("Not implemented")
-    }
-
-    fn token_kind(&self) -> Result<Option<T>> {
-        panic!("Not implemented")
-    }
+fn as_token_kind<T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<T> {
+    if let ParseTree::Token { token } = parse_tree {
+        // /[A-Z][0-9A-Z_]*/ => TOKEN_KIND;
+        if let TOKEN_KIND = token.kind() {
+            if let Ok(token_kind) = T::from_str(token.text()) {
+                Ok(token_kind)
+            } else { Err(Error::from(ErrorKind::NotTokenKind)) }
+        } else { Err(Error::from(ErrorKind::NotTokenKind)) }
+    } else { Err(Error::from(ErrorKind::NotTokenKind)) }
 }
 
 lazy_static! {
-    // '"([^"\n\r\\]|\\.)*"' => REGULAR_EXPRESSION;
-    // "'([^'\n\r\\]|\\.)*'" => REGULAR_EXPRESSION;
-    // "=>" => PRODUCTION_OPERATOR;
-    // "[A-Z][0-9A-Z_]*" => TOKEN_KIND;
-    // ";" => SEMICOLON;
-    // "[\n\r\t ]" => ;
-    // "//[^\n\r]" => ;
-    static ref LEXER_PRODUCTIONS: Map<Re, Option<TokenKind>> = map![
+    // /\/([^\/\n\r\\]|\\.)+\// => REGULAR_EXPRESSION;
+    // /=>/ => PRODUCTION_OPERATOR;
+    // /[A-Z][0-9A-Z_]*/ => TOKEN_KIND;
+    // /;/ => SEMICOLON;
+    // /[\n\r\t ]/ => ;
+    // /\/\/[^\n\r]*/ => ;
+    pub(crate) static ref LEXER_PRODUCTIONS: Map<Expression, Option<TokenKind>> = map![
         rcon![
-            rsym![rsgl!('"')],
-            rast!(ralt![
+            rsym![rsgl!('/')],
+            rplu!(ralt![
                 rneg![
-                    rsgl!('"'),
+                    rsgl!('/'),
                     rsgl!('\n'),
                     rsgl!('\r'),
                     rsgl!('\\')
@@ -87,23 +117,7 @@ lazy_static! {
                     rsym![rall!()]
                 ]
             ]),
-            rsym![rsgl!('"')]
-        ] => Some(REGULAR_EXPRESSION),
-        rcon![
-            rsym![rsgl!('\'')],
-            rast!(ralt![
-                rneg![
-                    rsgl!('\''),
-                    rsgl!('\n'),
-                    rsgl!('\r'),
-                    rsgl!('\\')
-                ],
-                rcon![
-                    rsym![rsgl!('\\')],
-                    rsym![rall!()]
-                ]
-            ]),
-            rsym![rsgl!('\'')]
+            rsym![rsgl!('/')]
         ] => Some(REGULAR_EXPRESSION),
         rcon![
             rsym![rsgl!('=')],
@@ -117,7 +131,7 @@ lazy_static! {
                 rsgl!('_')
             ])
         ] => Some(TOKEN_KIND),
-        rsym![rsgl!(':')] => Some(SEMICOLON),
+        rsym![rsgl!(';')] => Some(SEMICOLON),
         rsym![
             rsgl!('\n'),
             rsgl!('\r'),
@@ -134,14 +148,23 @@ lazy_static! {
         ] => None
     ];
 
-    // Grammar ::= Production*;
+    // Root ::= (Production | Consumption)*;
     // Production ::= REGULAR_EXPRESSION PRODUCTION_OPERATOR TOKEN_KIND SEMICOLON;
-    static ref PARSER_PRODUCTIONS: Map<Nonterminal, Expression<Nonterminal, TokenKind>> = map![
-        Grammar => past!(pnon!(Production)),
+    // Consumption ::= REGULAR_EXPRESSION PRODUCTION_OPERATOR SEMICOLON;
+    pub(crate) static ref PARSER_PRODUCTIONS: Map<Nonterminal, parser_bootstrap::Expression<Nonterminal, TokenKind>> = map![
+        Root => past!(palt![
+            pnon!(Production),
+            pnon!(Consumption)
+        ]),
         Production => pcon![
             ptok!(REGULAR_EXPRESSION),
             ptok!(PRODUCTION_OPERATOR),
             ptok!(TOKEN_KIND),
+            ptok!(SEMICOLON)
+        ],
+        Consumption => pcon![
+            ptok!(REGULAR_EXPRESSION),
+            ptok!(PRODUCTION_OPERATOR),
             ptok!(SEMICOLON)
         ]
     ];
