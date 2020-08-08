@@ -8,6 +8,6 @@ edition = "2018"
 
 [dependencies]
 uuid = { version = "0.8", features = ["v4"] }
-interval-map = { path = "../../IntervalMap" }
-finite-automata = { path = "../../FiniteAutomata" }
-re-bootstrap = { path = "../../RegularExpression/re-bootstrap" }
+interval-map = { git = "https://github.com/RobertDurfee/IntervalMap" }
+finite-automata = { git = "https://github.com/RobertDurfee/FiniteAutomata" }
+re-bootstrap = { git = "https://github.com/RobertDurfee/RegularExpression" }

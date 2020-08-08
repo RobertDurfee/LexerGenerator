@@ -8,8 +8,7 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4.0"
-interval-map = { path = "../../IntervalMap" }
-re-bootstrap = { path = "../../RegularExpression/re-bootstrap" }
-re = { path = "../../RegularExpression/re" }
+interval-map = { git = "https://github.com/RobertDurfee/IntervalMap" }
+re = { git = "https://github.com/RobertDurfee/RegularExpression" }
 lexer-bootstrap = { path = "../lexer-bootstrap" }
-parser-bootstrap = { path = "../../ParserGenerator/parser-bootstrap" }
+parser-bootstrap = { git = "https://github.com/RobertDurfee/ParserGenerator" }
