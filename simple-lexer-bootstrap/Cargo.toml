@@ -1,0 +1,19 @@
+[package]
+name = "simple-lexer-bootstrap"
+version = "0.1.0"
+authors = ["Robert Durfee <rbd@mit.edu>"]
+description = "A simple, runtime lexer generator."
+license-file = "LICENSE"
+repository = "https://github.com/RobertDurfee/LexerGenerator"
+readme = "README.md"
+keywords = ["lexer", "lexer-generator", "lexical-analysis"]
+categories = ["parsing"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+uuid = { version = "0.8", features = ["v4"] }
+segment-map = "0.1.0"
+finite-automata = "0.1.1"
+regular-expression-bootstrap = "0.1.0"
