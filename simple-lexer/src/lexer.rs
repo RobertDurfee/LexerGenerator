@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use lexer_bootstrap::Lexer as LexerBootstrap;
+use simple_lexer_bootstrap::Lexer as LexerBootstrap;
 use crate::{
     grammar::{
         LEXER_PRODUCTIONS,
@@ -9,7 +9,7 @@ use crate::{
     },
     Token,
 };
-use parser_bootstrap::Parser;
+use simple_parser_bootstrap::Parser;
 
 type Result<T> = std::result::Result<T, &'static str>;
 

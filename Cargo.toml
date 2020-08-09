@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "lexer-bootstrap",
-    "lexer",
+    "simple-lexer-bootstrap",
+    "simple-lexer",
 ]

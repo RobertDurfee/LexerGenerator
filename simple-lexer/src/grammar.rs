@@ -3,8 +3,8 @@ use std::{
     str::FromStr,
 };
 use lazy_static::lazy_static;
-use interval_map;
-use re::{
+use segment_map;
+use regular_expression::{
     sym as rsym,
     neg as rneg,
     alt as ralt,
@@ -15,9 +15,9 @@ use re::{
     rng as rrng,
     all as rall,
     Expression,
+    Re,
 };
-use re::Re;
-use parser_bootstrap::{
+use simple_parser_bootstrap::{
     tok as ptok,
     non as pnon,
     alt as palt,
@@ -25,7 +25,6 @@ use parser_bootstrap::{
     ast as past,
     ParseTree,
 };
-use crate::map;
 
 type Result<T> = std::result::Result<T, &'static str>;
 
@@ -146,7 +145,7 @@ lazy_static! {
     // Root ::= (Production | Consumption)*;
     // Production ::= REGULAR_EXPRESSION PRODUCTION_OPERATOR TOKEN_KIND SEMICOLON;
     // Consumption ::= REGULAR_EXPRESSION PRODUCTION_OPERATOR SEMICOLON;
-    pub(crate) static ref PARSER_PRODUCTIONS: Map<Nonterminal, parser_bootstrap::Expression<Nonterminal, TokenKind>> = map![
+    pub(crate) static ref PARSER_PRODUCTIONS: Map<Nonterminal, simple_parser_bootstrap::Expression<Nonterminal, TokenKind>> = map![
         Root => past!(palt![
             pnon!(Production),
             pnon!(Consumption)
