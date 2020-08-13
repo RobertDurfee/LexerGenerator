@@ -3,17 +3,17 @@ name = "simple-lexer-bootstrap"
 version = "0.1.0"
 authors = ["Robert Durfee <rbd@mit.edu>"]
 description = "A simple, runtime lexer generator."
-license-file = "LICENSE"
-repository = "https://github.com/RobertDurfee/LexerGenerator"
+license = "MIT"
+repository = "https://github.com/RobertDurfee/LexerGenerator/tree/v0.1.0"
 readme = "README.md"
 keywords = ["lexer", "lexer-generator", "lexical-analysis"]
 categories = ["parsing"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+documentation = "https://docs.rs/simple-lexer-bootstrap/0.1.0/simple_lexer_bootstrap/"
+homepage = "https://github.com/RobertDurfee/LexerGenerator/tree/v0.1.0"
 
 [dependencies]
 uuid = { version = "0.8", features = ["v4"] }
-segment-map = "0.1.0"
-finite-automata = "0.1.1"
-regular-expression-bootstrap = "0.1.0"
+segment-map = { path = "../../SegmentMap", version = "0.1.0" }
+finite-automata = { path = "../../FiniteAutomata", version = "0.1.1" }
+regular-expression-bootstrap = { path = "../../RegularExpression/regular-expression-bootstrap", version = "0.1.0" }
